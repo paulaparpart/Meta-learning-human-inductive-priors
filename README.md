@@ -1,4 +1,4 @@
 # Meta-learning-human-inductive-priors
-Project on meta-learning artifical agent that discovers human decision heuristics (aka regularizers) from scratch.
+Project on meta-learning artifical agent that discovers human decision heuristics (aka regularizers) from scratch. (Parpart & Summerfield, 2025) 
 
-Disclaimer: This is work in progress and is not published yet.  
+This work is still being published, and the final code and paper will be made avaialble online at OSF.  
