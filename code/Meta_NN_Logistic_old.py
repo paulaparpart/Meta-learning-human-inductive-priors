@@ -10,16 +10,15 @@ sys.modules[__name__].__dict__.clear()
         - with varying statistical parameters such as noise levels, size, number of predictors, covariance level etc.
     The network learns a set of weights that best generalizes from training to test data
         - this set of weights can represent a heuristic (ML regularizers) or other strategy 
+        - we want to inspect the weight representations for functional form: 
+        - Are compressive nonlinearities performing better than ground truth weights? 
         
-    
-    What does this script do? Simulation that uses the network to predict y_hat with logistic y outcome
-    loss function is binary cross entropy loss (at dataset level) 
+    What does this script do? Simulation that uses the network to predict the binary target (y_hat) 
+    - loss function is binary cross entropy loss 
      
-    npred can be set at start 
-    
-    Measure outcome as: 
-    1) Multiplot of y_loss plot (see how fast converges) 
-    3) Multiplot of weight clouds (w_hat over ground truth) just for 1 batch for epoch = 200
+    Inspect the following outcomes: 
+    1) Multiplot of y_loss plot (see how fast the NN converges) 
+    3) Multiplot of learnt weights (w_hat over ground truth) 
     
  
     Hyperparameters of optimal network - may need to be adjusted:
@@ -54,7 +53,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Parameters outside the loop
+# Setting Hyper-parameters
 iter = 100  # epochs
 b = 500  ## Mini-batch training
 L_param = 0.001
@@ -123,8 +122,7 @@ def transform(weights, D):
     pred = weights.shape[1]  # e.g., if this is 3 then D.view(500, 20, 3) from original D = 500x60 etc.
 
     # reshape D = 500x40 into D = 500x20x2
-    x = D.view(500, 20,
-               pred)  # x[1, 0, :] shows that the first row of the first tensor has grouped the entries of D[1, :] by pairs too, taking two adjacent entries and putting them into a row (= the reverse of the flatten() operation)
+    x = D.view(500, 20, pred)  # x[1, 0, :] shows that the first row of the first tensor has grouped the entries of D[1, :] by pairs too, taking two adjacent entries and putting them into a row (= the reverse of the flatten() operation)
     W = weights.view(500, pred, 1)  # weights[0,:] and W[0,:,:] shows reshape worked correctly
     # batch-multiply two 3D tensors :)   500x20x2 * 500x2x1 = 500x20x1
     out = torch.bmm(x, W)  # torch.Size([500, 20, 1])
@@ -138,7 +136,7 @@ def merge(list1, list2):
     return merged_list
 
 
-# Sigmoid Model
+# Sigmoid Model - Compressive Nonlinearity Functions
 # 𝛽1 : Controls the curve's steepness, i.e. slope
 # 𝛽2 : Slides the curve on the x-axis.
 def sigmoid2(x, Beta_1, Beta_2):
@@ -152,7 +150,7 @@ def logistic(var):
 
 
 
-
+# -------- Generate synthetic data: generative process -----------------------
 # Cycle through noise - parameters:
 for c in range(0, 1):  # len(noise)
 
@@ -292,7 +290,7 @@ for c in range(0, 1):  # len(noise)
     labels_split = torch.split(validset[1], b, dim=0)
     Validloader = merge(input_split, labels_split)
 
-    # split the ground truth in same way?
+    # split the ground truth in same way
     # trainset[1] = labels  like ground_truth
     w_split = torch.split(ground_truth, b, dim=0)
     GT_loader = w_split
@@ -356,6 +354,7 @@ for c in range(0, 1):  # len(noise)
     #     # loss_row = torch.abs(input - target).mean(1)  # .mean(1) gives row-means (MSE), .sum(1) gives row-sums (SSE)
     #     loss_row = ((input - target) ** 2).mean(1)  # MSE
     #     return loss_row
+
     # Manual Binary Cross Entropy
     # def bce(x,y):
     #     # x,y could matrices or vectors
@@ -394,7 +393,7 @@ for c in range(0, 1):  # len(noise)
     snapweights = torch.empty(iter, b, npred)
 
 
-    #iter = 20
+
 
     for epoch in range(iter):  # loop over the dataset multiple times
 
@@ -429,26 +428,25 @@ for c in range(0, 1):  # len(noise)
         avg_train_loss[epoch] = np.mean(batch_loss[epoch, :])
 
 
-        ######################
-        ## once you know the validation loss works, comment below out!
+        #####################
         # validate the model: Evaluation on independent testsets (same distribution) #
-        ######################
-          # net.eval()
-        # # with 100.000 testset, these are 200 batch runs
-        # with torch.no_grad():
-        #     # cycle through test batches too
-        #     for l, data in enumerate(Testloader1):
-        #
-        #         inputs_train, labels_train = data  # Testloader1[l]
-        #         inputs_test, labels_test = Testloader2[l]  # Testloader2 needs to have same dimensions as Testloader
-        #         # Network needs 2 inputs now
-        #         y_hat_test_eval, weights_eval = net(inputs_train, inputs_test[:, 0:(nsamp * npred)])
-        #         y_test_eval = inputs_test[:, (nsamp * npred):((nsamp * npred) + nsamp)]
-        #         loss2 = loss_fn(y_hat_test_eval, y_test_eval)
-        #         batch_loss_valid[epoch, l] = torch.mean(loss2).item()  # gets the average test loss in 200 different batches with those net parameters from epoch
-        #
-        #
-        # # calculate average loss over an epoch: mean per epoch is still going to be in the 400s if the sum(Loss) is taken above for a batch (batch size = 500 makes it be around 400)
+        #####################
+        net.eval()
+        # with 100.000 testset, these are 200 batch runs
+        with torch.no_grad():
+            # cycle through test batches too
+            for l, data in enumerate(Testloader1):
+
+                inputs_train, labels_train = data  # Testloader1[l]
+                inputs_test, labels_test = Testloader2[l]  # Testloader2 needs to have same dimensions as Testloader
+                # Network needs 2 inputs now
+                y_hat_test_eval, weights_eval = net(inputs_train, inputs_test[:, 0:(nsamp * npred)])
+                y_test_eval = inputs_test[:, (nsamp * npred):((nsamp * npred) + nsamp)]
+                loss2 = loss_fn(y_hat_test_eval, y_test_eval)
+                batch_loss_valid[epoch, l] = torch.mean(loss2).item()  # gets the average test loss in 200 different batches with those net parameters from epoch
+
+
+        # calculate average loss over an epoch: mean per epoch is still going to be in the 400s if the sum(Loss) is taken above for a batch (batch size = 500 makes it be around 400)
         avg_valid_loss[epoch] = np.mean(batch_loss_valid[epoch, :])
 
         # print the current train and val loss
@@ -476,7 +474,6 @@ for c in range(0, 1):  # len(noise)
 
 
     # 5. Save the data in a data.frame
-    import pandas as pd
     df = pd.DataFrame(dict(epoch=range(iter), avg_loss_train=avg_train_loss, avg_loss_test=avg_valid_loss,
                            avg_w_loss = avg_w_loss,
                            mean_loss_train=avg_train_loss.mean(), mean_loss_test=avg_valid_loss.mean()))
@@ -488,9 +485,9 @@ print('Finished Noise simulations')
 
 
 
+## ------------ Inspect Training and Test loss -----------------------------------------------------
 
-
-## After simulation, Multi-plot y-loss:
+##  Multi-plot y-loss:
 path = "/Users/paulaparpart/PycharmProjects/TF_Test/y-loss/noise"
 os.chdir(path)
 os.getcwd()
@@ -523,7 +520,7 @@ for c in range(0, len(noise)):
     plt.close()
 
 
-
+# ------- Inspect learnt weights representations -------------------------------------------
 ## Single plot W cloud (noise = 0): weight recovery
 c = 0
 cloud = torch.load('Logistic_snapweights_EN%.0f_LN%.0f_Noise%.3f_pred%.0f_b%.0f_epochs%.0f_BCE_negweights%.0f.pt' % (earlynoise, latenoise, noise[c], npred, b,  round(iter), negative))
@@ -567,7 +564,7 @@ plt.savefig('../noise/Logistic_Weightrecovery_negweights%.0f_npred_%.0f.png' % (
 plt.close()
 
 
-
+# ----------- Visualize power law fits ----------------------------
 ## Power Law fitting: joint fit
 
 # Power Law Distortion
@@ -655,7 +652,7 @@ for c in range(0, len(noise)):
 
 
 
-
+# ------------- Inspect sigmoidal (non-linear compression heuristics) fits to the learnt weights ---------------
 
 # Sigmoid Model
 def sigmoid(x, Beta_1, Beta_2):
@@ -777,14 +774,6 @@ for c in range(0, len(noise)):
     fig3.set_size_inches(14, 10)
     plt.savefig('../noise/Logistic_Grid_Histogram_of_sigmoidal_slopes_%.0fnpred.pdf' % npred)
     plt.close()
-
-
-# MEAN(beta_1) across 500
-# avg_steepness = np.nanmean(params[:, 0]) # can handle None
-# SD(beta_1) across 500
-# sd_steepness = np.std(params[:, 0])
-# axs[c].text(0, 0.99, 'MEAN(beta_1) = %.1f  SD(beta_1) = %.1f' % (avg_steepness, sd_steepness), horizontalalignment='left', verticalalignment='top')
-
 
 
 
