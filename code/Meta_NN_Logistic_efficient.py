@@ -23,8 +23,7 @@ import torch.nn.functional as F
 
 """
 
-# -----------------------------
-# Config
+# Hyperparameters
 # -----------------------------
 @dataclass
 class Config:
@@ -49,7 +48,7 @@ class Config:
     earlynoise: bool = True
     latenoise: bool = False
     cov_level: float = 0.8
-    slope: float = 1.0                   # your code uses Beta_1 = 1/slope
+    slope: float = 1.0                   #  Beta_1 = 1/slope
     negative_weights: bool = True
 
     # Numerics
@@ -68,8 +67,8 @@ def torch_dtype(dtype_str: str) -> torch.dtype:
     raise ValueError(f"Unsupported dtype: {dtype_str}")
 
 
-# -----------------------------
-# Utilities
+
+# covariance function
 # -----------------------------
 def make_cov(npred: int, level: float, device: str, dtype: torch.dtype) -> torch.Tensor:
     cov = torch.full((npred, npred), float(level), device=device, dtype=dtype)
@@ -88,7 +87,7 @@ def set_seed(seed: int) -> None:
 # -----------------------------
 class TaskBatchGenerator:
     """
-    Generates a batch of meta-learning "tasks" (datasets) in a vectorized way.
+    Generates a batch of meta-learning tasks (datasets), now in a vectorized way.
 
     Each task:
       - sample ground-truth weights w_true
@@ -137,20 +136,20 @@ class TaskBatchGenerator:
         y_train = y_clean + torch.randn_like(y_clean) * float(l_noise)             # [B, nsamp]
 
         # Empirical beta_hat (OLS / LSQ)
-        # my original: pinv(X^T X) X^T y  (per task).
+        # our original: pinv(X^T X) X^T y  (per task).
         # Here: batched least squares, more stable and fast for small npred.
         # Shapes: A=[B, nsamp, npred], B=[B, nsamp, 1] -> sol=[B, npred, 1]
         sol = torch.linalg.lstsq(x_train, y_train.unsqueeze(-1)).solution
         beta_hat = sol.squeeze(-1)                                                 # [B, npred]
 
         # Optional ridge stabilization
-        if cfg.ridge and cfg.ridge > 0:
-            # Solve (X^T X + ridge I) beta = X^T y
-            xt = x_train.transpose(1, 2)                                           # [B, npred, nsamp]
-            a = xt @ x_train                                                      # [B, npred, npred]
-            a = a + cfg.ridge * torch.eye(cfg.npred, device=self.device, dtype=self.dtype).unsqueeze(0)
-            b = xt @ y_train.unsqueeze(-1)                                         # [B, npred, 1]
-            beta_hat = torch.linalg.solve(a, b).squeeze(-1)
+        # if cfg.ridge and cfg.ridge > 0:
+        #     # Solve (X^T X + ridge I) beta = X^T y
+        #     xt = x_train.transpose(1, 2)                                           # [B, npred, nsamp]
+        #     a = xt @ x_train                                                      # [B, npred, npred]
+        #     a = a + cfg.ridge * torch.eye(cfg.npred, device=self.device, dtype=self.dtype).unsqueeze(0)
+        #     b = xt @ y_train.unsqueeze(-1)                                         # [B, npred, 1]
+        #     beta_hat = torch.linalg.solve(a, b).squeeze(-1)
 
         # Test data (clean)
         x_new = self._sample_correlated_normal(batch)
